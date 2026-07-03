@@ -26,11 +26,9 @@ impl TryFrom<serde_yml::Mapping> for FieldGroup {
     type Error = ParserError;
     fn try_from(mapping: serde_yml::Mapping) -> Result<Self, Self::Error> {
         let mut fields = vec![];
+        // serde_yml::Mapping is keyed by String since 0.0.13
         for (name, values) in mapping.into_iter() {
-            match name {
-                Value::String(name) => fields.push(Field::from_yaml(name, values)?),
-                _ => return Err(Self::Error::InvalidFieldName(format!("{:?}", name))),
-            }
+            fields.push(Field::from_yaml(name, values)?);
         }
         Ok(Self { fields })
     }
@@ -80,7 +78,7 @@ impl TryFrom<Value> for Selection {
                                 return Err(Self::Error::SelectionParsingError(
                                     String::new(),
                                     InvalidKeywordSelection(format!("{:?}", value)),
-                                ))
+                                ));
                             }
                         }
                     }
@@ -97,7 +95,7 @@ impl TryFrom<Value> for Selection {
                             return Err(Self::Error::SelectionParsingError(
                                 String::new(),
                                 MixedKeywordAndFieldlist(),
-                            ))
+                            ));
                         }
                     }
                 }

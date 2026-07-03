@@ -1,6 +1,6 @@
 use crate::field::Utf16Modifier;
-use base64::engine::general_purpose::STANDARD_NO_PAD;
 use base64::Engine;
+use base64::engine::general_purpose::STANDARD_NO_PAD;
 use std::collections::HashMap;
 
 pub fn encode_base64(input: &str, utf16modifier: &Option<Utf16Modifier>) -> String {

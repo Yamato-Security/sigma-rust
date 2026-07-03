@@ -9,9 +9,9 @@ use crate::basevalue::BaseValue;
 use crate::error::ParserError;
 use crate::error::ParserError::{IPParsing, InvalidYAML};
 use crate::event::{Event, EventValue};
-use crate::field::transformation::{encode_base64, encode_base64_offset, windash_variations};
 use crate::field::ValueTransformer::{Base64, Base64offset, Windash};
-use crate::wildcard::{tokenize, WildcardToken};
+use crate::field::transformation::{encode_base64, encode_base64_offset, windash_variations};
+use crate::wildcard::{WildcardToken, tokenize};
 use cidr::IpCidr;
 use regex::Regex;
 use serde_yml::Value;
@@ -89,12 +89,12 @@ impl Field {
             }
         }
 
-        if self.modifier.value_transformer.is_some() {
+        if let Some(value_transformer) = self.modifier.value_transformer.as_ref() {
             let mut transformed_values: Vec<FieldValue> = Vec::with_capacity(self.values.len());
 
             for val in &self.values {
                 let s = val.as_string()?;
-                match self.modifier.value_transformer.as_ref().unwrap() {
+                match value_transformer {
                     Base64(utf16) => {
                         transformed_values.push(FieldValue::from(encode_base64(s.as_str(), utf16)))
                     }

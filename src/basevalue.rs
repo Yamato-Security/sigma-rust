@@ -150,7 +150,17 @@ impl TryFrom<serde_yml::Value> for BaseValue {
     fn try_from(value: serde_yml::Value) -> Result<Self, Self::Error> {
         match value {
             serde_yml::Value::Bool(b) => Ok(Self::Boolean(b)),
-            serde_yml::Value::Number(n) => number!(n),
+            // serde_yml::Number::as_f64() returns f64 directly since 0.0.13,
+            // so the shared number! macro (built for Option<f64>) no longer fits here.
+            serde_yml::Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    Ok(Self::Int(i))
+                } else if let Some(u) = n.as_u64() {
+                    Ok(Self::Unsigned(u))
+                } else {
+                    Ok(Self::Float(n.as_f64()))
+                }
+            }
             serde_yml::Value::String(s) => Ok(Self::String(s)),
             serde_yml::Value::Null => Ok(Self::Null),
             _ => Err(ParserError::InvalidYAML(format!("{:?}", value))),
@@ -191,10 +201,22 @@ mod tests {
         );
 
         let yaml = r#"
+        EventID: 9223372036854775807
+"#;
+        let v: serde_yml::Value = serde_yml::from_str(yaml).unwrap();
+        let base_value = BaseValue::try_from(v["EventID"].clone()).unwrap();
+        assert_eq!(base_value, BaseValue::Int(9223372036854775807));
+
+        // The noyalib backend of serde_yml 0.0.13 has no u64 representation:
+        // integers above i64::MAX are parsed as floats (with precision loss).
+        let yaml = r#"
         EventID: 18446744073709551615
 "#;
         let v: serde_yml::Value = serde_yml::from_str(yaml).unwrap();
         let base_value = BaseValue::try_from(v["EventID"].clone()).unwrap();
-        assert_eq!(base_value, BaseValue::Unsigned(18446744073709551615));
+        assert_eq!(
+            base_value,
+            BaseValue::Float(18446744073709551615_u64 as f64)
+        );
     }
 }

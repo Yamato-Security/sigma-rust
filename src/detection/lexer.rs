@@ -19,14 +19,14 @@ pub(crate) enum Token {
 impl Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Selection(ref s) => write!(f, "{}", s),
+            Self::Selection(s) => write!(f, "{}", s),
             Self::Not => write!(f, "not"),
             Self::And => write!(f, "and"),
             Self::Or => write!(f, "or"),
             Self::OpeningParenthesis => write!(f, "("),
             Self::ClosingParenthesis => write!(f, ")"),
-            Self::OneOf(ref s) => write!(f, "1 of {}", s),
-            Self::AllOf(ref s) => write!(f, "all of {}", s),
+            Self::OneOf(s) => write!(f, "1 of {}", s),
+            Self::AllOf(s) => write!(f, "all of {}", s),
             Self::OneOfThem => write!(f, "1 of them"),
             Self::AllOfThem => write!(f, "all them"),
             Self::End => write!(f, "<END>"),
