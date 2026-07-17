@@ -86,7 +86,7 @@ pub fn windash_variations(input: &str) -> Vec<String> {
     }
 
     let original_str = input.to_string();
-    for (flag, _) in replacements.iter() {
+    for flag in replacements.keys() {
         for windash in windash_chars.iter() {
             if flag.starts_with(&windash.to_string()) {
                 continue;

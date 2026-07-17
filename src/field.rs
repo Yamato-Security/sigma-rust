@@ -89,12 +89,12 @@ impl Field {
             }
         }
 
-        if self.modifier.value_transformer.is_some() {
+        if let Some(value_transformer) = &self.modifier.value_transformer {
             let mut transformed_values: Vec<FieldValue> = Vec::with_capacity(self.values.len());
 
             for val in &self.values {
                 let s = val.as_string()?;
-                match self.modifier.value_transformer.as_ref().unwrap() {
+                match value_transformer {
                     Base64(utf16) => {
                         transformed_values.push(FieldValue::from(encode_base64(s.as_str(), utf16)))
                     }
