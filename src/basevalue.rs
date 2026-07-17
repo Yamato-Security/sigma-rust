@@ -191,6 +191,14 @@ mod tests {
         );
 
         let yaml = r#"
+        EventID: 9223372036854775807
+"#;
+        let v: yaml_serde::Value = yaml_serde::from_str(yaml).unwrap();
+        let base_value = BaseValue::try_from(v["EventID"].clone()).unwrap();
+        assert_eq!(base_value, BaseValue::Int(9223372036854775807));
+
+        // Integers above i64::MAX are preserved as u64 (yaml_serde keeps full precision).
+        let yaml = r#"
         EventID: 18446744073709551615
 "#;
         let v: yaml_serde::Value = yaml_serde::from_str(yaml).unwrap();

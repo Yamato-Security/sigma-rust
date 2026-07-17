@@ -89,7 +89,7 @@ impl Field {
             }
         }
 
-        if let Some(value_transformer) = &self.modifier.value_transformer {
+        if let Some(value_transformer) = self.modifier.value_transformer.as_ref() {
             let mut transformed_values: Vec<FieldValue> = Vec::with_capacity(self.values.len());
 
             for val in &self.values {

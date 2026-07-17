@@ -2,6 +2,7 @@
 //! `sigma-rust` is a library for parsing and checking Sigma rules against log events.
 
 mod basevalue;
+pub mod correlation;
 mod detection;
 mod error;
 mod event;
@@ -10,12 +11,21 @@ mod rule;
 mod selection;
 mod wildcard;
 
+use crate::correlation::ParseRulesResult;
+pub use correlation::{
+    CorrelationEngine, SigmaCorrelationRule, TimestampedEvent, parse_rules_from_yaml,
+};
 pub use event::Event;
 pub use rule::Rule;
 
 /// Parse a rule from a YAML string
 pub fn rule_from_yaml(yaml: &str) -> Result<Rule, yaml_serde::Error> {
     yaml_serde::from_str(yaml)
+}
+
+/// Parse Correlation rules from YAML (separated by ---)
+pub fn correlation_rule_from_yaml(yaml: &str) -> ParseRulesResult {
+    parse_rules_from_yaml(yaml)
 }
 
 /// Parse an event from a JSON string

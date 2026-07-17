@@ -53,7 +53,7 @@ pub enum RelatedType {
 
 /// The logsource describes the log data on which the detection is meant to be applied to.
 /// It describes the log source, the platform, the application and the type that is required in the detection.
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Default)]
 pub struct Logsource {
     /// The category value is used to select all log files written of a logical group.
     /// This may cover one or more sources of information depending on the system.
@@ -124,6 +124,8 @@ pub struct Rule {
     pub modified: Option<String>,
     /// This section describes the log data on which the detection is meant to be applied to.
     /// It describes the log source, the platform, the application and the type that is required in the detection.
+    /// An empty `logsource:` (YAML null) is treated as a logsource with no fields set.
+    #[serde(deserialize_with = "logsource_or_null")]
     pub logsource: Logsource,
     /// A set of search-identifiers that represent properties of searches on log data.
     pub detection: Detection,
@@ -146,6 +148,13 @@ pub struct Rule {
     /// Capture any additional fields
     #[serde(flatten)]
     pub custom_fields: HashMap<String, yaml_serde::Value>,
+}
+
+fn logsource_or_null<'de, D>(deserializer: D) -> Result<Logsource, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(Option::<Logsource>::deserialize(deserializer)?.unwrap_or_default())
 }
 
 impl Rule {
@@ -266,10 +275,13 @@ mod tests {
         }
 
         assert_eq!(rule.detection.get_condition(), "selection".to_string());
-        assert_eq!(rule.custom_fields["custom_field"], "some value");
         assert_eq!(
-            rule.custom_fields["another_custom_field"]["nested"],
-            "nested_value"
+            rule.custom_fields["custom_field"].as_str(),
+            Some("some value")
+        );
+        assert_eq!(
+            rule.custom_fields["another_custom_field"]["nested"].as_str(),
+            Some("nested_value")
         );
 
         let event = Event::from([("field_name", "this")]);
