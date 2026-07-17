@@ -14,8 +14,8 @@ use crate::field::transformation::{encode_base64, encode_base64_offset, windash_
 use crate::wildcard::{WildcardToken, tokenize};
 use cidr::IpCidr;
 use regex::Regex;
-use serde_yml::Value;
 use std::str::FromStr;
+use yaml_serde::Value;
 
 // https://sigmahq.io/docs/basics/modifiers.html
 #[derive(Debug)]

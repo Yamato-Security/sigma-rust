@@ -19,8 +19,8 @@ pub use event::Event;
 pub use rule::Rule;
 
 /// Parse a rule from a YAML string
-pub fn rule_from_yaml(yaml: &str) -> Result<Rule, serde_yml::Error> {
-    serde_yml::from_str(yaml)
+pub fn rule_from_yaml(yaml: &str) -> Result<Rule, yaml_serde::Error> {
+    yaml_serde::from_str(yaml)
 }
 
 /// Parse Correlation rules from YAML (separated by ---)

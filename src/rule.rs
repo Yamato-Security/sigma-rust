@@ -124,8 +124,7 @@ pub struct Rule {
     pub modified: Option<String>,
     /// This section describes the log data on which the detection is meant to be applied to.
     /// It describes the log source, the platform, the application and the type that is required in the detection.
-    /// An empty `logsource:` (YAML null) is treated as a logsource with no fields set,
-    /// matching the behavior of serde_yml before 0.0.13.
+    /// An empty `logsource:` (YAML null) is treated as a logsource with no fields set.
     #[serde(deserialize_with = "logsource_or_null")]
     pub logsource: Logsource,
     /// A set of search-identifiers that represent properties of searches on log data.
@@ -148,7 +147,7 @@ pub struct Rule {
     pub tags: Option<Vec<String>>,
     /// Capture any additional fields
     #[serde(flatten)]
-    pub custom_fields: HashMap<String, serde_yml::Value>,
+    pub custom_fields: HashMap<String, yaml_serde::Value>,
 }
 
 fn logsource_or_null<'de, D>(deserializer: D) -> Result<Logsource, D::Error>
@@ -223,7 +222,7 @@ mod tests {
         another_custom_field:
             nested: nested_value
         "#;
-        let rule: Rule = serde_yml::from_str(rule_yaml).unwrap();
+        let rule: Rule = yaml_serde::from_str(rule_yaml).unwrap();
         assert_eq!(rule.title, "Some test title");
         assert_eq!(
             rule.id,
