@@ -16,7 +16,7 @@ detection:
     condition: all of them
         "#;
 
-    let rule: Rule = serde_yml::from_str(rule_yaml).unwrap();
+    let rule: Rule = yaml_serde::from_str(rule_yaml).unwrap();
 
     let event: Event = json!( {
         "EventID": 4624,
