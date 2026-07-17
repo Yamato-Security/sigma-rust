@@ -1,6 +1,6 @@
 use crate::field::Utf16Modifier;
-use base64::engine::general_purpose::STANDARD_NO_PAD;
 use base64::Engine;
+use base64::engine::general_purpose::STANDARD_NO_PAD;
 use std::collections::HashMap;
 
 pub fn encode_base64(input: &str, utf16modifier: &Option<Utf16Modifier>) -> String {
@@ -86,7 +86,7 @@ pub fn windash_variations(input: &str) -> Vec<String> {
     }
 
     let original_str = input.to_string();
-    for (flag, _) in replacements.iter() {
+    for flag in replacements.keys() {
         for windash in windash_chars.iter() {
             if flag.starts_with(&windash.to_string()) {
                 continue;

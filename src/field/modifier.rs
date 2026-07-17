@@ -101,7 +101,7 @@ impl FromStr for Modifier {
                         return Err(Self::Err::ConflictingModifiers(
                             m.to_string(),
                             m2.to_string(),
-                        ))
+                        ));
                     }
                     None => {
                         utf16_modifier = Some(m);
