@@ -7,8 +7,8 @@ use crate::event::Event;
 use crate::selection::Selection;
 use crate::wildcard::match_tokenized;
 use serde::Deserialize;
-use serde_yml::Value;
 use std::collections::HashMap;
+use yaml_serde::Value;
 
 #[derive(Deserialize, Debug)]
 struct DetectionProxy {
@@ -174,7 +174,7 @@ mod tests {
         let mut event = Event::from([("EventID", 6416)]);
         event.insert("RandomID", "ab");
 
-        let detection: Detection = serde_yml::from_str(detection_yaml).unwrap();
+        let detection: Detection = yaml_serde::from_str(detection_yaml).unwrap();
         assert_eq!(detection.selections.len(), 2);
         let result = detection.evaluate(&event);
         assert!(result);
@@ -202,7 +202,7 @@ mod tests {
         let mut event = Event::from([("EventID", 6416)]);
         event.insert("RandomID", "ab");
 
-        let detection: Detection = serde_yml::from_str(detection_yaml).unwrap();
+        let detection: Detection = yaml_serde::from_str(detection_yaml).unwrap();
         assert_eq!(detection.selections.len(), 2);
         let result = detection.evaluate(&event);
         assert!(result);
@@ -229,7 +229,7 @@ mod tests {
         let mut event = Event::from([("EventID", 6416)]);
         event.insert("RandomID", "ab");
 
-        let detection: Detection = serde_yml::from_str(detection_yaml).unwrap();
+        let detection: Detection = yaml_serde::from_str(detection_yaml).unwrap();
         assert_eq!(detection.selections.len(), 2);
         let result = detection.evaluate(&event);
         assert!(result);
@@ -256,7 +256,7 @@ mod tests {
         let mut event = Event::from([("EventID", 6416)]);
         event.insert("RandomID", "ab");
 
-        let detection: Detection = serde_yml::from_str(detection_yaml).unwrap();
+        let detection: Detection = yaml_serde::from_str(detection_yaml).unwrap();
         assert_eq!(detection.selections.len(), 2);
         let result = detection.evaluate(&event);
         assert!(!result);
