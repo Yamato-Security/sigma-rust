@@ -31,10 +31,22 @@ criterion = { version = "0.8.2", features = ["html_reports"] }
 [[bench]]
 name = "matching_benchmark"
 harness = false
+required-features = ["serde_json"]
 
 [[bench]]
 name = "correlation_benchmark"
 harness = false
+required-features = ["serde_json"]
+
+# The correlation example and test build events from JSON, so they require the
+# serde_json feature (skipped under --no-default-features).
+[[example]]
+name = "detect_correlation"
+required-features = ["serde_json"]
+
+[[test]]
+name = "correlation"
+required-features = ["serde_json"]
 
 [features]
 default = ["serde_json"]
