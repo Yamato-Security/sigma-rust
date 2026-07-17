@@ -1,6 +1,7 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use serde_json::json;
-use sigma_rust::{check_rule, Event, Rule};
+use sigma_rust::{Event, Rule, check_rule};
+use std::hint::black_box;
 
 fn rule_match_benchmark(c: &mut Criterion) {
     let rule_yaml = r#"

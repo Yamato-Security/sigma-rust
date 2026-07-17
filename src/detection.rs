@@ -43,7 +43,7 @@ impl TryFrom<DetectionProxy> for Detection {
                             Err(ParserError::SelectionParsingError(name, se))
                         }
                         _ => Err(e),
-                    }
+                    };
                 }
             }
         }
@@ -136,11 +136,11 @@ impl Detection {
                 .selections
                 .keys()
                 .all(|name| self.evaluate_selection(name, lookup, event)),
-            Ast::Not(ref operand) => !self.eval(event, operand, lookup),
-            Ast::Or(ref left, ref right) => {
+            Ast::Not(operand) => !self.eval(event, operand, lookup),
+            Ast::Or(left, right) => {
                 self.eval(event, left, lookup) || self.eval(event, right, lookup)
             }
-            Ast::And(ref left, ref right) => {
+            Ast::And(left, right) => {
                 self.eval(event, left, lookup) && self.eval(event, right, lookup)
             }
         }

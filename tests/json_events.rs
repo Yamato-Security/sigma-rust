@@ -1,7 +1,7 @@
 #[cfg(feature = "serde_json")]
 use serde_json::json;
 #[cfg(feature = "serde_json")]
-use sigma_rust::{check_rule, event_from_json, events_from_json, rule_from_yaml, Event};
+use sigma_rust::{Event, check_rule, event_from_json, events_from_json, rule_from_yaml};
 
 #[cfg(feature = "serde_json")]
 #[test]

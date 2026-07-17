@@ -6,7 +6,8 @@ pub enum ParserError {
     #[error("Unknown field modifier '{0}' provided")]
     UnknownModifier(String),
 
-    #[error("UTF16 encoding requested but no value transformation modifier provided (base64 or base64offset)"
+    #[error(
+        "UTF16 encoding requested but no value transformation modifier provided (base64 or base64offset)"
     )]
     Utf16WithoutBase64,
 
@@ -54,7 +55,8 @@ pub enum ParserError {
     #[error("Field names must be string, got: '{0}'")]
     InvalidFieldName(String),
 
-    #[error("The modifiers contains, startswith and endswith must be used with string values, violated for field: '{0}'"
+    #[error(
+        "The modifiers contains, startswith and endswith must be used with string values, violated for field: '{0}'"
     )]
     InvalidValueForStringModifier(String),
 }
