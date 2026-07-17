@@ -1,11 +1,27 @@
 # sigma-rust
 
-![Build](https://github.com/jopohl/sigma-rust/actions/workflows/ci.yml/badge.svg)
-[![codecov](https://codecov.io/github/jopohl/sigma-rust/graph/badge.svg?token=6SOQK71524)](https://codecov.io/github/jopohl/sigma-rust)
-[![Crates.io](https://img.shields.io/crates/v/sigma-rust)](https://crates.io/crates/sigma-rust)
-[![Docs.rs](https://docs.rs/sigma-rust/badge.svg)](https://docs.rs/sigma-rust)
+![Build](https://github.com/Yamato-Security/sigma-rust/actions/workflows/ci.yml/badge.svg)
 
 A Rust library for parsing and evaluating Sigma rules to create custom detection pipelines.
+
+> [!NOTE]
+> **This is a maintained and actively updated fork** of the original
+> [`jopohl/sigma-rust`](https://github.com/jopohl/sigma-rust), kept by
+> [Yamato Security](https://github.com/Yamato-Security). On top of the upstream
+> features it:
+>
+> - adds **Sigma correlation rule** support (`event_count`, `value_count`, `temporal`, `temporal_ordered`),
+> - tracks the latest Rust edition and dependency versions, and
+> - uses [`yaml_serde`](https://github.com/yaml/yaml-serde) (the actively maintained
+>   `serde_yaml` fork from the official YAML organization) as its YAML backend,
+>   which — unlike some other successors — parses large `u64` values correctly.
+>
+> Releases are published as [GitHub releases](https://github.com/Yamato-Security/sigma-rust/releases)
+> and consumed as a git dependency (this fork is not published to crates.io):
+>
+> ```toml
+> sigma-rust = { git = "https://github.com/Yamato-Security/sigma-rust", tag = "v0.7.1" }
+> ```
 
 ## Features
 
@@ -13,9 +29,11 @@ A Rust library for parsing and evaluating Sigma rules to create custom detection
 - Supports all [Sigma field modifiers](https://sigmahq.io/docs/basics/modifiers.html) except `expand`
 - Support
   for [String wildcards](https://github.com/SigmaHQ/sigma-specification/blob/main/specification/sigma-rules-specification.md#string-wildcard)
+- Supports [Sigma correlation rules](https://github.com/SigmaHQ/sigma-specification/blob/main/specification/sigma-correlation-rules-specification.md)
+  (`event_count`, `value_count`, `temporal`, and `temporal_ordered`) over a stream of timestamped events
 - Written in 100% safe Rust
 - Daily automated security audit of dependencies
-- Extensive test suite
+- Extensive test suite (validated against the full SigmaHQ rule set)
 
 ## Example
 
@@ -98,6 +116,17 @@ selection_2:
   field: "42"
 condition: 1 of them
 ```
+
+## Sigma correlation rules
+
+Beyond single rules, this fork evaluates
+[Sigma correlation rules](https://github.com/SigmaHQ/sigma-specification/blob/main/specification/sigma-correlation-rules-specification.md)
+over a stream of timestamped events. Parse a document of base rules and
+correlation rules with `parse_rules_from_yaml`, feed `TimestampedEvent`s to a
+`CorrelationEngine`, and it emits a result whenever a correlation
+(`event_count`, `value_count`, `temporal`, or `temporal_ordered`) fires. See
+[`examples/detect_correlation.rs`](examples/detect_correlation.rs) for a
+complete, runnable example.
 
 ## License
 
