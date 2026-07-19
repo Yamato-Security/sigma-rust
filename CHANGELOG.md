@@ -52,7 +52,7 @@ replacement. Contains breaking changes.
 
 Releases before `0.7.0` predate this changelog. See the
 [GitHub releases](https://github.com/Yamato-Security/sigma-rust/releases) and
-[commit history](https://github.com/Yamato-Security/sigma-rust/commits/master).
+[commit history](https://github.com/Yamato-Security/sigma-rust/commits/main).
 
 - `0.6.0` — 2025-05-08 · `0.5.1` / `0.5.0` — 2025-01-26 · `0.4.1` — 2025-01-17 ·
   `0.4.0` — 2025-01-16 · `0.3.0` — 2024-11-28 · `0.2.1` — 2024-11-01 ·
