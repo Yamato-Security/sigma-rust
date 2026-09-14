@@ -5,19 +5,16 @@
 A Rust library for parsing and evaluating Sigma rules to create custom detection pipelines.
 
 > [!NOTE]
-> **This is a maintained and actively updated fork** of the original
-> [`jopohl/sigma-rust`](https://github.com/jopohl/sigma-rust), kept by
-> [Yamato Security](https://github.com/Yamato-Security). On top of the upstream
-> features it:
+> **This is an actively maintained fork** of the original
+> [`jopohl/sigma-rust`](https://github.com/jopohl/sigma-rust) crate, maintained by
+> [Yamato Security](https://github.com/Yamato-Security). The upstream crate's latest
+> release is [`v0.7.0` (November 2025)](https://crates.io/crates/sigma-rust) and it has
+> had no commits since; this fork continues its development and — most notably — adds
+> **Sigma correlation-rule** support. See
+> [Differences from the upstream crate](#differences-from-the-upstream-crate) for the full list.
 >
-> - adds **Sigma correlation rule** support (`event_count`, `value_count`, `temporal`, `temporal_ordered`),
-> - tracks the latest Rust edition and dependency versions, and
-> - uses [`yaml_serde`](https://github.com/yaml/yaml-serde) (the actively maintained
->   `serde_yaml` fork from the official YAML organization) as its YAML backend,
->   which — unlike some other successors — parses large `u64` values correctly.
->
-> Releases are published as [GitHub releases](https://github.com/Yamato-Security/sigma-rust/releases)
-> and consumed as a git dependency (this fork is not published to crates.io):
+> This fork is **not published to crates.io** — consume it as a git dependency pinned to a
+> [release tag](https://github.com/Yamato-Security/sigma-rust/releases):
 >
 > ```toml
 > sigma-rust = { git = "https://github.com/Yamato-Security/sigma-rust", tag = "v0.7.1" }
@@ -34,6 +31,30 @@ A Rust library for parsing and evaluating Sigma rules to create custom detection
 - Written in 100% safe Rust
 - Daily automated security audit of dependencies
 - Extensive test suite (validated against the full SigmaHQ rule set)
+
+## Differences from the upstream crate
+
+This fork builds on [`jopohl/sigma-rust`](https://github.com/jopohl/sigma-rust) `v0.7.0`
+(Rust edition 2021, the `serde_norway` YAML backend, and **no correlation support**). The
+notable differences are:
+
+| Area | Upstream `jopohl/sigma-rust` `v0.7.0` | This fork (`v0.7.1`) |
+|---|---|---|
+| **Sigma correlation rules** | not supported | **supported** — `event_count`, `value_count`, `temporal`, and `temporal_ordered` correlations over a stream of timestamped events, via a new `correlation` module (`CorrelationEngine`, `SigmaCorrelationRule`, `TimestampedEvent`, `parse_rules_from_yaml`, `correlation_rule_from_yaml`) |
+| **Rust edition / MSRV** | edition 2021, MSRV 1.81 | **edition 2024, MSRV 1.86** |
+| **YAML backend** | `serde_norway` | **`yaml_serde`** — the [YAML organization's](https://github.com/yaml/yaml-serde) actively-maintained `serde_yaml` successor, with correct `u64` handling (all 3,040 SigmaHQ rules parse) |
+| **New dependencies** | — | `chrono` (event timestamps), `rayon` (parallel evaluation), `anyhow` (correlation error handling) |
+| **Error handling** | `thiserror` 1 | `thiserror` 2 |
+| **Other dependencies** | older pins | refreshed — e.g. `strum` 0.26 → 0.28, `criterion` 0.5 → 0.8, plus `cidr`, `regex`, `serde`, `serde_json` |
+| **Benchmarks** | matching only | matching **and** correlation benchmarks |
+| **Distribution** | published on [crates.io](https://crates.io/crates/sigma-rust) | GitHub releases only — consumed as a pinned git dependency (not on crates.io) |
+| **Maintenance** | last release `v0.7.0` (Nov 2025), no commits since | actively maintained |
+
+Because of the YAML-backend change, the public API differs: `Rule.custom_fields` is a
+`HashMap<String, yaml_serde::Value>` and `rule_from_yaml` returns
+`Result<Rule, yaml_serde::Error>` (the upstream types are the `serde_norway` equivalents).
+
+See the [CHANGELOG](CHANGELOG.md) for the full release history.
 
 ## Example
 
