@@ -3,8 +3,10 @@ use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
-use serde::{Deserialize, Serialize};
+use serde::de::{SeqAccess, Visitor, value::SeqAccessDeserializer};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 use std::time::Duration;
 
 /// Sigma Correlation Rule types
@@ -45,10 +47,102 @@ impl CorrelationCondition {
     }
 }
 
-/// Field aliases for mapping different field names across log sources
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Field aliases for mapping different field names across log sources.
+///
+/// The Sigma correlation spec defines the `aliases` key as a two-level map — alias name to a
+/// map of referenced-rule name to the field that carries that alias in the rule's log source:
+///
+/// ```yaml
+/// aliases:
+///   user:
+///     rule_a: TargetUserName
+///     rule_b: SubjectUserName
+/// ```
+///
+/// This type is `#[serde(transparent)]` so it deserializes straight from that outer map. It
+/// previously was not, which made serde demand a redundant nested `aliases:` key underneath
+/// `correlation.aliases`; every spec-conformant rule carrying aliases failed to parse outright
+/// (a hard error, not a silent drop). The inner `aliases` field is kept so `resolve_field_alias`
+/// and any downstream reader keep working unchanged.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(transparent)]
 pub struct FieldAliases {
     pub aliases: HashMap<String, HashMap<String, String>>,
+}
+
+/// Visitor accepting either a single string or a sequence of strings, yielding `Vec<String>`.
+///
+/// The Sigma correlation spec allows a scalar wherever a list of names is expected, so
+/// `rules: single_rule` and `group-by: user` are as valid as their one-element list forms.
+struct StringOrSeq;
+
+impl<'de> Visitor<'de> for StringOrSeq {
+    type Value = Vec<String>;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a string or a sequence of strings")
+    }
+
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        Ok(vec![value.to_string()])
+    }
+
+    fn visit_seq<A>(self, seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: SeqAccess<'de>,
+    {
+        Deserialize::deserialize(SeqAccessDeserializer::new(seq))
+    }
+}
+
+/// Deserialize a `Vec<String>` from either a scalar string or a sequence of strings.
+fn string_or_seq<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    deserializer.deserialize_any(StringOrSeq)
+}
+
+/// Deserialize an `Option<Vec<String>>` from either a scalar string or a sequence of strings.
+fn optional_string_or_seq<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct OptStringOrSeq;
+
+    impl<'de> Visitor<'de> for OptStringOrSeq {
+        type Value = Option<Vec<String>>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("null, a string, or a sequence of strings")
+        }
+
+        fn visit_unit<E>(self) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(None)
+        }
+
+        fn visit_none<E>(self) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(None)
+        }
+
+        fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            deserializer.deserialize_any(StringOrSeq).map(Some)
+        }
+    }
+
+    deserializer.deserialize_option(OptStringOrSeq)
 }
 
 /// Correlation section of a Sigma rule
@@ -56,7 +150,20 @@ pub struct FieldAliases {
 pub struct CorrelationSection {
     #[serde(rename = "type")]
     pub correlation_type: CorrelationType,
+    /// The spec allows a bare scalar here (`rules: single_rule`) as shorthand for a
+    /// one-element list; both forms deserialize into this vector.
+    #[serde(deserialize_with = "string_or_seq")]
     pub rules: Vec<String>,
+    /// The Sigma correlation spec spells this key `group-by`. Without the rename serde looked
+    /// for `group_by`, found nothing, and silently left this `None` — every shipped correlation
+    /// rule then had its grouping dropped and its threshold evaluated across the whole corpus
+    /// instead of per user / per source IP. `group_by` is kept as an alias so any rule written
+    /// against the old behaviour still parses. Note the *write* path changed with the rename:
+    /// serializing a `CorrelationSection` now emits `group-by`, not `group_by`.
+    ///
+    /// As with `rules`, a bare scalar (`group-by: user`) is accepted as a one-element list.
+    #[serde(rename = "group-by", alias = "group_by")]
+    #[serde(default, deserialize_with = "optional_string_or_seq")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub group_by: Option<Vec<String>>,
     pub timespan: String,

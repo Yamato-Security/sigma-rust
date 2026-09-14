@@ -95,6 +95,260 @@ fn test_correlation_condition_comprehensive() {
     assert!(!condition.matches(25));
 }
 
+/// The Sigma correlation spec spells the grouping key `group-by`, with a hyphen. Without
+/// `#[serde(rename = "group-by")]` serde looked for `group_by`, found nothing and left the field
+/// `None` — and because serde ignores unknown keys by default, the rule still parsed and the
+/// caller had no way to notice. Every correlation rule in the wild (SigmaHQ's and Suzaku's alike)
+/// writes the hyphenated form, so grouping was dropped and thresholds were evaluated across the
+/// whole corpus instead of per user, per source IP or per event id.
+#[test]
+fn test_group_by_accepts_the_hyphenated_spec_key() {
+    let hyphenated = r#"
+title: Grouped
+correlation:
+  type: event_count
+  rules:
+    - base
+  group-by:
+    - user
+    - src_ip
+  timespan: 5m
+  condition:
+    gte: 3
+"#;
+    let rule = parse_correlation_rule_from_yaml(hyphenated).unwrap();
+    assert!(
+        rule.correlation.group_by.is_some(),
+        "the spec key `group-by` must deserialize into `group_by`"
+    );
+    assert_eq!(
+        rule.correlation.group_by.unwrap(),
+        vec!["user".to_string(), "src_ip".to_string()]
+    );
+
+    // The snake_case spelling stays accepted via the alias, so nothing that parsed before breaks.
+    let underscored = hyphenated.replace("group-by:", "group_by:");
+    let rule = parse_correlation_rule_from_yaml(&underscored).unwrap();
+    assert_eq!(
+        rule.correlation.group_by.unwrap(),
+        vec!["user".to_string(), "src_ip".to_string()]
+    );
+
+    // A rule that declares no grouping still yields `None` rather than an empty list.
+    let ungrouped = r#"
+title: Ungrouped
+correlation:
+  type: event_count
+  rules:
+    - base
+  timespan: 5m
+  condition:
+    gte: 3
+"#;
+    let rule = parse_correlation_rule_from_yaml(ungrouped).unwrap();
+    assert!(rule.correlation.group_by.is_none());
+}
+
+/// The Sigma correlation spec defines `aliases` as a two-level map — alias name, then
+/// referenced-rule name, then the field carrying that alias in that rule's log source. The
+/// `FieldAliases` wrapper was not `#[serde(transparent)]`, so serde demanded a redundant nested
+/// `aliases:` key underneath `correlation.aliases`. Unlike the `group-by` bug this was a hard
+/// parse failure: any spec-conformant rule using aliases was rejected outright.
+#[test]
+fn test_aliases_parse_in_the_spec_two_level_form() {
+    let yaml = r#"
+title: Aliased
+correlation:
+  type: event_count
+  rules:
+    - rule_a
+    - rule_b
+  group-by:
+    - user
+  timespan: 5m
+  condition:
+    gte: 2
+  aliases:
+    user:
+      rule_a: TargetUserName
+      rule_b: SubjectUserName
+"#;
+    let rule = parse_correlation_rule_from_yaml(yaml).unwrap();
+    let aliases = rule.correlation.aliases.as_ref().expect("aliases parsed");
+    let user = aliases.aliases.get("user").expect("`user` alias present");
+    assert_eq!(user.get("rule_a"), Some(&"TargetUserName".to_string()));
+    assert_eq!(user.get("rule_b"), Some(&"SubjectUserName".to_string()));
+}
+
+/// Aliases are only useful if the engine actually resolves them, so drive the parsed rule
+/// through `process_events`: two base rules name the same user in differently-spelled fields,
+/// and the alias has to collapse them into one group for the `gte: 2` threshold to trip.
+#[test]
+fn test_aliases_resolve_fields_per_referenced_rule() {
+    let yaml = r#"
+title: Aliased
+correlation:
+  type: event_count
+  rules:
+    - rule_a
+    - rule_b
+  group-by:
+    - user
+  timespan: 5m
+  condition:
+    gte: 2
+  aliases:
+    user:
+      rule_a: TargetUserName
+      rule_b: SubjectUserName
+"#;
+    let rule = parse_correlation_rule_from_yaml(yaml).unwrap();
+
+    let rule_a = create_test_rule("rule_a");
+    let rule_b = create_test_rule("rule_b");
+
+    let mut engine = CorrelationEngine::new();
+    engine.add_correlation_rule(rule);
+
+    let base_time = DateTime::parse_from_rfc3339("2024-01-01T10:00:00Z")
+        .unwrap()
+        .with_timezone(&Utc);
+
+    let events = vec![
+        // alice, seen once under each rule's own spelling of the field
+        TimestampedEvent {
+            event: event_from_json(r#"{"TargetUserName": "alice"}"#).unwrap(),
+            timestamp: base_time,
+            rule: &rule_a,
+        },
+        TimestampedEvent {
+            event: event_from_json(r#"{"SubjectUserName": "alice"}"#).unwrap(),
+            timestamp: base_time + ChronoDuration::seconds(30),
+            rule: &rule_b,
+        },
+        // bob only shows up once, so he must not reach the threshold
+        TimestampedEvent {
+            event: event_from_json(r#"{"TargetUserName": "bob"}"#).unwrap(),
+            timestamp: base_time,
+            rule: &rule_a,
+        },
+    ];
+
+    let results = engine.process_events(&events).unwrap();
+    let matched: Vec<_> = results.iter().filter(|r| r.matched).collect();
+    assert_eq!(
+        matched.len(),
+        1,
+        "only alice's two differently-named fields should collapse into one group"
+    );
+    assert_eq!(matched[0].count, 2);
+    assert_eq!(matched[0].aggregation_key.group_values, vec!["alice"]);
+}
+
+/// The spec allows a bare scalar wherever a list of rule names is expected.
+#[test]
+fn test_rules_accepts_a_scalar() {
+    let yaml = r#"
+title: Single rule
+correlation:
+  type: event_count
+  rules: single_rule
+  group-by:
+    - user
+  timespan: 5m
+  condition:
+    gte: 3
+"#;
+    let rule = parse_correlation_rule_from_yaml(yaml).unwrap();
+    assert_eq!(rule.correlation.rules, vec!["single_rule".to_string()]);
+
+    // The sequence form keeps working.
+    let as_seq = yaml.replace("rules: single_rule", "rules:\n    - single_rule");
+    let rule = parse_correlation_rule_from_yaml(&as_seq).unwrap();
+    assert_eq!(rule.correlation.rules, vec!["single_rule".to_string()]);
+}
+
+/// Likewise for `group-by`, whose most common real-world form is a single field name.
+#[test]
+fn test_group_by_accepts_a_scalar() {
+    let yaml = r#"
+title: Single group key
+correlation:
+  type: event_count
+  rules:
+    - base
+  group-by: user
+  timespan: 5m
+  condition:
+    gte: 3
+"#;
+    let rule = parse_correlation_rule_from_yaml(yaml).unwrap();
+    assert_eq!(
+        rule.correlation.group_by,
+        Some(vec!["user".to_string()]),
+        "a scalar `group-by` must become a one-element list"
+    );
+
+    // The snake_case alias takes a scalar too.
+    let underscored = yaml.replace("group-by: user", "group_by: user");
+    let rule = parse_correlation_rule_from_yaml(&underscored).unwrap();
+    assert_eq!(rule.correlation.group_by, Some(vec!["user".to_string()]));
+}
+
+/// The `group-by` rename changed the *write* path as well as the read path: serializing a
+/// correlation rule now emits the hyphenated spec key, where it used to emit `group_by`.
+/// Aliases likewise serialize in the flat spec form, with no redundant nested `aliases:` key.
+#[test]
+fn test_serialization_round_trip_emits_the_spec_keys() {
+    let yaml = r#"
+title: Round trip
+correlation:
+  type: event_count
+  rules:
+    - rule_a
+  group-by:
+    - user
+    - src_ip
+  timespan: 5m
+  condition:
+    gte: 3
+  aliases:
+    user:
+      rule_a: TargetUserName
+"#;
+    let rule = parse_correlation_rule_from_yaml(yaml).unwrap();
+    let serialized = yaml_serde::to_string(&rule).unwrap();
+
+    assert!(
+        serialized.contains("group-by:"),
+        "serialization must emit the spec key `group-by`, got:\n{serialized}"
+    );
+    assert!(
+        !serialized.contains("group_by:"),
+        "the old `group_by` spelling must no longer be written, got:\n{serialized}"
+    );
+    assert_eq!(
+        serialized.matches("aliases:").count(),
+        1,
+        "aliases must serialize flat, without a redundant nested key, got:\n{serialized}"
+    );
+
+    let reparsed = parse_correlation_rule_from_yaml(&serialized).unwrap();
+    assert_eq!(reparsed.correlation.group_by, rule.correlation.group_by);
+    assert_eq!(reparsed.correlation.rules, rule.correlation.rules);
+    assert_eq!(
+        reparsed
+            .correlation
+            .aliases
+            .as_ref()
+            .unwrap()
+            .aliases
+            .get("user")
+            .and_then(|m| m.get("rule_a")),
+        Some(&"TargetUserName".to_string())
+    );
+}
+
 #[test]
 fn test_parse_correlation_rule() {
     let yaml = r#"
@@ -122,6 +376,13 @@ tags:
         CorrelationType::EventCount
     );
     assert_eq!(rule.correlation.rules, vec!["failed_logon"]);
+    assert_eq!(
+        rule.correlation.group_by,
+        Some(vec![
+            "TargetUserName".to_string(),
+            "TargetDomainName".to_string()
+        ])
+    );
     assert_eq!(rule.correlation.timespan, "5m");
     assert_eq!(rule.correlation.condition.unwrap().gte, Some(10));
 }
@@ -148,6 +409,10 @@ level: high
     assert_eq!(
         rule.correlation.correlation_type,
         CorrelationType::ValueCount
+    );
+    assert_eq!(
+        rule.correlation.group_by,
+        Some(vec!["SubjectUserName".to_string()])
     );
     assert_eq!(
         rule.correlation.condition.clone().unwrap().field,
