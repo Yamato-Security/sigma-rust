@@ -59,15 +59,38 @@ impl CorrelationCondition {
 ///     rule_b: SubjectUserName
 /// ```
 ///
-/// This type is `#[serde(transparent)]` so it deserializes straight from that outer map. It
-/// previously was not, which made serde demand a redundant nested `aliases:` key underneath
-/// `correlation.aliases`; every spec-conformant rule carrying aliases failed to parse outright
-/// (a hard error, not a silent drop). The inner `aliases` field is kept so `resolve_field_alias`
-/// and any downstream reader keep working unchanged.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+/// Serialization is `#[serde(transparent)]`, so the spec form is what gets written. Deserialization
+/// accepts that spec form and, for compatibility, the nested `aliases: { aliases: { ... } }` form
+/// that earlier releases both required on input and emitted on output. The inner `aliases` field
+/// is kept so `resolve_field_alias` and any downstream reader keep working unchanged.
+#[derive(Debug, Clone, Serialize, Default)]
 #[serde(transparent)]
 pub struct FieldAliases {
     pub aliases: HashMap<String, HashMap<String, String>>,
+}
+
+impl<'de> Deserialize<'de> for FieldAliases {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        /// The legacy form needs a map two levels deep under an `aliases` key, so a spec-form
+        /// alias that happens to be named `aliases` (whose value is only one level deep) still
+        /// falls through to the flat representation.
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Repr {
+            Legacy {
+                aliases: HashMap<String, HashMap<String, String>>,
+            },
+            Flat(HashMap<String, HashMap<String, String>>),
+        }
+
+        let aliases = match Repr::deserialize(deserializer)? {
+            Repr::Legacy { aliases } | Repr::Flat(aliases) => aliases,
+        };
+        Ok(FieldAliases { aliases })
+    }
 }
 
 /// Visitor accepting either a single string or a sequence of strings, yielding `Vec<String>`.

@@ -184,6 +184,43 @@ correlation:
 /// through `process_events`: two base rules name the same user in differently-spelled fields,
 /// and the alias has to collapse them into one group for the `gte: 2` threshold to trip.
 #[test]
+fn test_aliases_accept_the_legacy_nested_form_emitted_by_earlier_releases() {
+    // Before the transparent representation, serializing a FieldAliases produced a redundant
+    // nested `aliases:` key. Rules persisted in that shape must keep parsing.
+    let yaml = r#"
+title: Legacy Aliases
+correlation:
+    type: value_count
+    rules:
+        - rule_a
+        - rule_b
+    group-by:
+        - user
+    timespan: 1h
+    condition:
+        gte: 3
+        field: user
+    aliases:
+        aliases:
+            user:
+                rule_a: TargetUserName
+                rule_b: SubjectUserName
+"#;
+    let rule: SigmaCorrelationRule =
+        yaml_serde::from_str(yaml).expect("legacy nested aliases form must parse");
+    let aliases = rule.correlation.aliases.as_ref().expect("aliases present");
+    assert_eq!(aliases.aliases["user"]["rule_a"], "TargetUserName");
+    assert_eq!(aliases.aliases["user"]["rule_b"], "SubjectUserName");
+    // The write path stays on the spec form regardless of which form was read.
+    let out = yaml_serde::to_string(&rule).unwrap();
+    assert!(
+        out.contains("aliases:\n    user:") || out.contains("aliases:\n  user:"),
+        "serialized: {out}"
+    );
+    assert!(!out.contains("aliases:\n    aliases:"), "serialized: {out}");
+}
+
+#[test]
 fn test_aliases_resolve_fields_per_referenced_rule() {
     let yaml = r#"
 title: Aliased

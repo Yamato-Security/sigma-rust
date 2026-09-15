@@ -24,8 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Correlation `aliases` failed to parse in its spec form.** `FieldAliases`
   required a redundant nested `aliases:` key underneath `correlation.aliases`,
   so the spec's two-level `aliases: {<alias>: {<rule>: <field>}}` mapping was
-  rejected outright — a hard parse failure, not a silent drop. `FieldAliases` is
-  now `#[serde(transparent)]` and deserializes straight from the spec mapping;
+  rejected outright — a hard parse failure, not a silent drop. `FieldAliases` now
+  serializes as `#[serde(transparent)]` and deserializes from either the spec
+  mapping or the legacy nested form that earlier releases emitted;
   `resolve_field_alias` behaviour is unchanged.
 - **Scalars are now accepted where the spec allows them.** `rules: single_rule`
   and `group-by: user` deserialize into one-element vectors, matching the spec's
