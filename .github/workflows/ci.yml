@@ -76,3 +76,7 @@ jobs:
       - uses: ncipollo/release-action@v1
         with:
           generateReleaseNotes: true
+          # A release may already exist if it was created by hand (e.g. with
+          # curated notes via `gh release create`) — do not fail the tag build
+          # with a 422 "already_exists" in that case.
+          skipIfReleaseExists: true
