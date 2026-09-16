@@ -38,6 +38,9 @@ pub struct Modifier {
     pub(crate) match_all: bool,
     pub(crate) fieldref: bool,
     pub(crate) cased: bool,
+    /// The `neq` modifier (Sigma specification v2.1.0) negates the whole comparison, so it
+    /// composes with any other modifier: `contains|neq`, `startswith|neq`, `fieldref|neq`, ...
+    pub(crate) neq: bool,
     pub(crate) exists: Option<bool>,
     pub(crate) match_modifier: Option<MatchModifier>,
     pub(crate) value_transformer: Option<ValueTransformer>,
@@ -75,6 +78,12 @@ impl FromStr for Modifier {
             }
             if s == "cased" {
                 result.cased = true;
+                continue;
+            }
+            if s == "neq" {
+                // Repeating `neq` is idempotent (it sets the negation rather than toggling it),
+                // matching pySigma's SigmaNegateModifier.
+                result.neq = true;
                 continue;
             }
             if s == "exists" {
@@ -231,6 +240,63 @@ mod test {
     #[test]
     fn test_conflicting_exists_modifier() {
         let err = Modifier::from_str("fieldname|all|exists").unwrap_err();
+        assert!(matches!(err, ParserError::ExistsNotStandalone()));
+    }
+
+    #[test]
+    fn test_neq_modifier() {
+        let modifier = Modifier::from_str("fieldname|neq").unwrap();
+        assert!(modifier.neq);
+        assert!(modifier.match_modifier.is_none());
+        assert!(!modifier.fieldref);
+        assert!(!modifier.match_all);
+    }
+
+    #[test]
+    fn test_neq_modifier_composes_with_other_modifiers() {
+        let modifier = Modifier::from_str("fieldname|contains|neq").unwrap();
+        assert!(modifier.neq);
+        assert_eq!(modifier.match_modifier, Some(MatchModifier::Contains));
+
+        // The position of `neq` in the chain does not matter.
+        let modifier = Modifier::from_str("fieldname|neq|contains").unwrap();
+        assert!(modifier.neq);
+        assert_eq!(modifier.match_modifier, Some(MatchModifier::Contains));
+
+        let modifier = Modifier::from_str("fieldname|fieldref|neq").unwrap();
+        assert!(modifier.neq);
+        assert!(modifier.fieldref);
+
+        let modifier = Modifier::from_str("fieldname|contains|all|cased|neq").unwrap();
+        assert!(modifier.neq);
+        assert!(modifier.match_all);
+        assert!(modifier.cased);
+        assert_eq!(modifier.match_modifier, Some(MatchModifier::Contains));
+
+        let modifier = Modifier::from_str("fieldname|base64offset|utf16le|contains|neq").unwrap();
+        assert!(modifier.neq);
+        assert_eq!(
+            modifier.value_transformer,
+            Some(Base64offset(Some(Utf16Modifier::Utf16le)))
+        );
+    }
+
+    #[test]
+    fn test_repeated_neq_modifier_is_idempotent() {
+        let modifier = Modifier::from_str("fieldname|neq|neq").unwrap();
+        assert!(modifier.neq);
+    }
+
+    #[test]
+    fn test_neq_modifier_is_case_insensitive() {
+        let modifier = Modifier::from_str("fieldname|NEQ").unwrap();
+        assert!(modifier.neq);
+    }
+
+    #[test]
+    fn test_conflicting_exists_neq_modifier() {
+        // `exists` must stay standalone; negate it by flipping its boolean value instead.
+        let err = Modifier::from_str("fieldname|exists|neq").unwrap_err();
         assert!(matches!(err, ParserError::ExistsNotStandalone()));
     }
 }

@@ -23,7 +23,9 @@ A Rust library for parsing and evaluating Sigma rules to create custom detection
 ## Features
 
 - Supports the [Sigma condition](https://sigmahq.io/docs/basics/conditions.html) syntax using Pratt parsing
-- Supports all [Sigma field modifiers](https://sigmahq.io/docs/basics/modifiers.html) except `expand`
+- Supports the [Sigma field modifiers](https://sigmahq.io/docs/basics/modifiers.html), including the
+  `neq` negation modifier added in Sigma specification v2.1.0 (not yet supported: `expand`, the `re`
+  sub-modifiers `i`/`m`/`s`, and the v2.1.0 time modifiers `minute`/`hour`/`day`/`week`/`month`/`year`)
 - Support
   for [String wildcards](https://github.com/SigmaHQ/sigma-specification/blob/main/specification/sigma-rules-specification.md#string-wildcard)
 - Supports [Sigma correlation rules](https://github.com/SigmaHQ/sigma-specification/blob/main/specification/sigma-correlation-rules-specification.md)
