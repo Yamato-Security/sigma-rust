@@ -17,15 +17,15 @@ A Rust library for parsing and evaluating Sigma rules to create custom detection
 > [release tag](https://github.com/Yamato-Security/sigma-rust/releases):
 >
 > ```toml
-> sigma-rust = { git = "https://github.com/Yamato-Security/sigma-rust", tag = "v0.7.2" }
+> sigma-rust = { git = "https://github.com/Yamato-Security/sigma-rust", tag = "v0.7.3" }
 > ```
 
 ## Features
 
 - Supports the [Sigma condition](https://sigmahq.io/docs/basics/conditions.html) syntax using Pratt parsing
 - Supports the [Sigma field modifiers](https://sigmahq.io/docs/basics/modifiers.html), including the
-  `neq` negation modifier added in Sigma specification v2.1.0 (not yet supported: `expand`, the `re`
-  sub-modifiers `i`/`m`/`s`, and the v2.1.0 time modifiers `minute`/`hour`/`day`/`week`/`month`/`year`)
+  `re` sub-modifiers `i`/`m`/`s` and the `neq` negation modifier added in Sigma specification v2.1.0
+  (not yet supported: `expand` and the v2.1.0 time modifiers `minute`/`hour`/`day`/`week`/`month`/`year`)
 - Support
   for [String wildcards](https://github.com/SigmaHQ/sigma-specification/blob/main/specification/sigma-rules-specification.md#string-wildcard)
 - Supports [Sigma correlation rules](https://github.com/SigmaHQ/sigma-specification/blob/main/specification/sigma-correlation-rules-specification.md)
@@ -40,7 +40,7 @@ This fork builds on [`jopohl/sigma-rust`](https://github.com/jopohl/sigma-rust) 
 (Rust edition 2021, the `serde_norway` YAML backend, and **no correlation support**). The
 notable differences are:
 
-| Area | Upstream `jopohl/sigma-rust` `v0.7.0` | This fork (`v0.7.1`) |
+| Area | Upstream `jopohl/sigma-rust` `v0.7.0` | This fork (`v0.7.3`) |
 |---|---|---|
 | **Sigma correlation rules** | not supported | **supported** — `event_count`, `value_count`, `temporal`, and `temporal_ordered` correlations over a stream of timestamped events, via a new `correlation` module (`CorrelationEngine`, `SigmaCorrelationRule`, `TimestampedEvent`, `parse_rules_from_yaml`, `correlation_rule_from_yaml`) |
 | **Rust edition / MSRV** | edition 2021, MSRV 1.81 | **edition 2024, MSRV 1.86** |
@@ -118,6 +118,33 @@ precedence over nested fields. For example, if you have an event like
 ```
 
 the engine will evaluate `Event.ID` to 42.
+
+## Regular expression flags
+
+The `re` modifier matches case-sensitive regular expressions by default. Append
+these sub-modifiers after `re` to enable additional matching modes:
+
+| Sub-modifier | Behavior |
+|---|---|
+| `i` | Case-insensitive matching |
+| `m` | `^` and `$` match the start and end of each line |
+| `s` | `.` also matches newline characters |
+
+Flags can be combined, such as `Message|re|i|m|s`, and apply to every pattern in a
+value list. Lists match any pattern by default; append `all` to require every
+pattern, or `neq` to negate the comparison.
+
+```yaml
+detection:
+  selection:
+    Message|re|i|m: '^error:'
+  condition: selection
+```
+
+This matches a line beginning with `error:`, regardless of case, anywhere in
+`Message`. Each flag requires a preceding `re`; `Message|i` and `Message|i|re`
+are rejected. Inline regex flags remain supported and can override these defaults
+within the pattern.
 
 ## Strong type checking
 

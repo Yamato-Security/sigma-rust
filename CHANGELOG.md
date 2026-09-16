@@ -8,7 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-09-18
+
 ### Added
+
+- **Regular expression sub-modifiers `i`, `m`, and `s`.** Use `field|re|i` for
+  case-insensitive matching, `field|re|m` for per-line `^`/`$` anchors, and
+  `field|re|s` to let `.` match newlines. Flags can be combined and work with
+  value lists, `all`, and `neq`. They must follow `re`; invalid usage reports
+  `ParserError::RegexFlagWithoutRe`. Plain `re` keeps its existing defaults,
+  and inline regex flags remain supported.
 
 - **The `neq` field modifier** from the
   [Sigma specification v2.1.0](https://github.com/SigmaHQ/sigma-specification/blob/main/specification/sigma-appendix-modifiers.md).
@@ -122,7 +131,8 @@ Releases before `0.7.0` predate this changelog. See the
   `0.4.0` — 2025-01-16 · `0.3.0` — 2024-11-28 · `0.2.1` — 2024-11-01 ·
   `0.2.0` — 2024-10-31
 
-[Unreleased]: https://github.com/Yamato-Security/sigma-rust/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/Yamato-Security/sigma-rust/compare/v0.7.3...HEAD
+[0.7.3]: https://github.com/Yamato-Security/sigma-rust/releases/tag/v0.7.3
 [0.7.2]: https://github.com/Yamato-Security/sigma-rust/releases/tag/v0.7.2
 [0.7.1]: https://github.com/Yamato-Security/sigma-rust/releases/tag/v0.7.1
 [0.7.0]: https://github.com/Yamato-Security/sigma-rust/releases/tag/v0.7.0

@@ -6,6 +6,9 @@ pub enum ParserError {
     #[error("Unknown field modifier '{0}' provided")]
     UnknownModifier(String),
 
+    #[error("The regex sub-modifier '{0}' must follow the 're' modifier")]
+    RegexFlagWithoutRe(String),
+
     #[error(
         "UTF16 encoding requested but no value transformation modifier provided (base64 or base64offset)"
     )]
@@ -17,9 +20,7 @@ pub enum ParserError {
     #[error("Failed to parse regular expression: '{0}'")]
     RegexParsing(regex::Error),
 
-    #[error(
-        "The modifier '{0}' must not be combined with other modifiers except 'all' and 'fieldref'"
-    )]
+    #[error("The modifier '{0}' must not be combined with value transformation modifiers")]
     StandaloneViolation(String),
 
     #[error("The 'exists' modifier must not be combined with any other modifiers")]

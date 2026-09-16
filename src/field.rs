@@ -13,7 +13,7 @@ use crate::field::ValueTransformer::{Base64, Base64offset, Windash};
 use crate::field::transformation::{encode_base64, encode_base64_offset, windash_variations};
 use crate::wildcard::{WildcardToken, tokenize};
 use cidr::IpCidr;
-use regex::Regex;
+use regex::RegexBuilder;
 use std::str::FromStr;
 use yaml_serde::Value;
 
@@ -130,7 +130,12 @@ impl Field {
                     Ok(ip) => *v = FieldValue::Cidr(ip),
                     Err(err) => return Err(IPParsing(v.as_string()?, err.to_string())),
                 },
-                Some(MatchModifier::Re) => match Regex::new(v.as_string()?.as_str()) {
+                Some(MatchModifier::Re) => match RegexBuilder::new(v.as_string()?.as_str())
+                    .case_insensitive(self.modifier.regex_case_insensitive)
+                    .multi_line(self.modifier.regex_multi_line)
+                    .dot_matches_new_line(self.modifier.regex_dot_matches_new_line)
+                    .build()
+                {
                     Ok(re) => *v = FieldValue::Regex(re),
                     Err(err) => return Err(ParserError::RegexParsing(err)),
                 },
@@ -489,8 +494,28 @@ mod tests {
 
     #[test]
     fn test_invalid_regex() {
-        let err = Field::new("test|re", vec![FieldValue::from(r"[")]).unwrap_err();
-        assert!(matches!(err, ParserError::RegexParsing(_)));
+        for field in [
+            "test|re",
+            "test|re|i",
+            "test|re|m",
+            "test|re|s",
+            "test|re|i|m|s",
+        ] {
+            let err = Field::new(field, vec![FieldValue::from(r"[")]).unwrap_err();
+            assert!(matches!(err, ParserError::RegexParsing(_)));
+        }
+    }
+
+    #[test]
+    fn test_regex_submodifiers_require_string_values() {
+        for value in [
+            FieldValue::from(42),
+            FieldValue::from(true),
+            FieldValue::from(None),
+        ] {
+            let err = Field::new("test|re|i|m|s", vec![value]).unwrap_err();
+            assert!(matches!(err, ParserError::NotAString(_)));
+        }
     }
 
     #[test]
