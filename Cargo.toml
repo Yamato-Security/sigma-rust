@@ -1,7 +1,7 @@
 [package]
 name = "sigma-rust"
 description = "A library for parsing and evaluating Sigma rules to create custom detection pipelines"
-version = "0.7.1"
+version = "0.7.2"
 edition = "2024"
 authors = ["Dr.-Ing. Johannes Pohl <johannes.pohl90@gmail.com>"]
 categories = ["parser-implementations", "data-structures"]
@@ -12,16 +12,16 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/jopohl/sigma-rust"
 
 [dependencies]
-base64 = "0.22.1"
+base64 = "0.23.1"
 cidr = "0.3.2"
 regex = "1.13.1"
-serde = { version = "1.0.228", features = ["derive"] }
-yaml_serde = "0.10.4"
+serde = { version = "1.0.229", features = ["derive"] }
+yaml_serde = "0.10.7"
 strum = { version = "0.28.0", features = ["derive"] }
-thiserror = "2.0.18"
-serde_json = { version = "1.0.150", optional = true }
+thiserror = "2.0.20"
+serde_json = { version = "1.0.151", optional = true }
 chrono = "0.4.45"
-anyhow = "1.0.103"
+anyhow = "1.0.104"
 rayon = "1.12.0"
 
 [dev-dependencies]
