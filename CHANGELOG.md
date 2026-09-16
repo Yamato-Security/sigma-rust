@@ -8,14 +8,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.7.2] - 2026-09-18
 
-Maintenance release: dependency upgrades only. No API changes.
-
 ### Changed
 
 - Bumped dependencies to their latest releases: `base64` 0.22.1 → 0.23.1,
   `serde` 1.0.228 → 1.0.229, `serde_json` 1.0.150 → 1.0.151,
   `yaml_serde` 0.10.4 → 0.10.7, `thiserror` 2.0.18 → 2.0.20,
   `anyhow` 1.0.103 → 1.0.104.
+
+### Fixed
+
+- **Correlation `group-by` was silently ignored.** The Sigma correlation spec
+  spells the grouping key `group-by`, but `CorrelationSection::group_by` carried
+  no `#[serde(rename)]`, so serde looked for `group_by`, found nothing and — since
+  unknown keys are ignored by default — left the field `None` without an error.
+  Every correlation rule written to spec lost its grouping: thresholds were
+  evaluated across the whole event corpus instead of per user, per source IP or
+  per event id, which both suppressed real matches and produced false ones. The
+  hyphenated key now deserializes correctly and `group_by` is kept as an alias so
+  rules written against the old behaviour still parse. Note this also changes the
+  *write* path: serializing a `CorrelationSection` now emits `group-by` rather
+  than `group_by`.
+- **Correlation `aliases` failed to parse in its spec form.** `FieldAliases`
+  required a redundant nested `aliases:` key underneath `correlation.aliases`,
+  so the spec's two-level `aliases: {<alias>: {<rule>: <field>}}` mapping was
+  rejected outright — a hard parse failure, not a silent drop. `FieldAliases` now
+  serializes as `#[serde(transparent)]` and deserializes from either the spec
+  mapping or the legacy nested form that earlier releases emitted;
+  `resolve_field_alias` behaviour is unchanged.
+- **Scalars are now accepted where the spec allows them.** `rules: single_rule`
+  and `group-by: user` deserialize into one-element vectors, matching the spec's
+  allowance of a bare scalar in place of a single-item list. Sequence forms are
+  unaffected.
 
 ## [0.7.1] - 2026-07-18
 
