@@ -38,6 +38,9 @@ pub struct Modifier {
     pub(crate) match_all: bool,
     pub(crate) fieldref: bool,
     pub(crate) cased: bool,
+    pub(crate) regex_case_insensitive: bool,
+    pub(crate) regex_multi_line: bool,
+    pub(crate) regex_dot_matches_new_line: bool,
     /// The `neq` modifier (Sigma specification v2.1.0) negates the whole comparison, so it
     /// composes with any other modifier: `contains|neq`, `startswith|neq`, `fieldref|neq`, ...
     pub(crate) neq: bool,
@@ -90,6 +93,20 @@ impl FromStr for Modifier {
                 // The real value of the exists modifier will be set during field parsing
                 // because it is the field value and here we only parse the field name.
                 result.exists = Some(bool::default());
+                continue;
+            }
+
+            let regex_flag = match s.as_str() {
+                "i" => Some(&mut result.regex_case_insensitive),
+                "m" => Some(&mut result.regex_multi_line),
+                "s" => Some(&mut result.regex_dot_matches_new_line),
+                _ => None,
+            };
+            if let Some(flag) = regex_flag {
+                if result.match_modifier != Some(MatchModifier::Re) {
+                    return Err(Self::Err::RegexFlagWithoutRe(s));
+                }
+                *flag = true;
                 continue;
             }
 
@@ -229,6 +246,47 @@ mod test {
             err,
             ParserError::ConflictingModifiers(ref a, ref b) if a == "cidr" && b == "re",
         ));
+    }
+
+    #[test]
+    fn test_regex_flags_require_preceding_re() {
+        for flag in ["i", "m", "s"] {
+            for field in [
+                format!("test|{flag}"),
+                format!("test|{flag}|re"),
+                format!("test|contains|{flag}"),
+                format!("test|cidr|{flag}"),
+                format!("test|fieldref|{flag}"),
+            ] {
+                let err = Modifier::from_str(&field).unwrap_err();
+                assert!(
+                    matches!(err, ParserError::RegexFlagWithoutRe(ref s) if s == flag),
+                    "{field}: {err}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_regex_flags_preserve_modifier_conflicts() {
+        for field in ["test|re|i|base64", "test|windash|re|m|s"] {
+            let err = Modifier::from_str(field).unwrap_err();
+            assert!(matches!(err, ParserError::StandaloneViolation(ref s) if s == "re"));
+        }
+
+        let err = Modifier::from_str("test|re|i|contains").unwrap_err();
+        assert!(matches!(err, ParserError::ConflictingModifiers(_, _)));
+
+        let err = Modifier::from_str("test|re|i|exists").unwrap_err();
+        assert!(matches!(err, ParserError::ExistsNotStandalone()));
+    }
+
+    #[test]
+    fn test_unknown_regex_flag() {
+        for flag in ["x", "im", "ims"] {
+            let err = Modifier::from_str(&format!("test|re|{flag}")).unwrap_err();
+            assert!(matches!(err, ParserError::UnknownModifier(ref s) if s == flag));
+        }
     }
 
     #[test]

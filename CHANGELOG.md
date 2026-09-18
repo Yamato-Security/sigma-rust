@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Regular expression sub-modifiers `i`, `m`, and `s`.** Use `field|re|i` for
+  case-insensitive matching, `field|re|m` for per-line `^`/`$` anchors, and
+  `field|re|s` to let `.` match newlines. Flags can be combined and work with
+  value lists, `all`, and `neq`. They must follow `re`; invalid usage reports
+  `ParserError::RegexFlagWithoutRe`. Plain `re` keeps its existing defaults,
+  and inline regex flags remain supported.
+
 - **The `neq` field modifier** from the
   [Sigma specification v2.1.0](https://github.com/SigmaHQ/sigma-specification/blob/main/specification/sigma-appendix-modifiers.md).
   `neq` negates the whole comparison of a field, so it composes with any other

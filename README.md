@@ -119,6 +119,33 @@ precedence over nested fields. For example, if you have an event like
 
 the engine will evaluate `Event.ID` to 42.
 
+## Regular expression flags
+
+The `re` modifier matches case-sensitive regular expressions by default. Append
+these sub-modifiers after `re` to enable additional matching modes:
+
+| Sub-modifier | Behavior |
+|---|---|
+| `i` | Case-insensitive matching |
+| `m` | `^` and `$` match the start and end of each line |
+| `s` | `.` also matches newline characters |
+
+Flags can be combined, such as `Message|re|i|m|s`, and apply to every pattern in a
+value list. Lists match any pattern by default; append `all` to require every
+pattern, or `neq` to negate the comparison.
+
+```yaml
+detection:
+  selection:
+    Message|re|i|m: '^error:'
+  condition: selection
+```
+
+This matches a line beginning with `error:`, regardless of case, anywhere in
+`Message`. Each flag requires a preceding `re`; `Message|i` and `Message|i|re`
+are rejected. Inline regex flags remain supported and can override these defaults
+within the pattern.
+
 ## Strong type checking
 
 This library performs strong type checking. That is, if you have a rule like
