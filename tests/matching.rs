@@ -323,6 +323,56 @@ fn test_match_fieldref_neq_modifier() {
 }
 
 #[test]
+fn test_match_fieldref_list_with_missing_reference() {
+    // A `fieldref` list is an OR over the referenced fields; one of them being absent from the
+    // event must not decide the result, whichever position it has in the list.
+    let yaml_missing_first = r#"
+        title: Image equals one of the referenced fields
+        logsource:
+        detection:
+            selection:
+                Image|fieldref:
+                    - OriginalFileName
+                    - ParentImage
+            condition: selection
+    "#;
+    let yaml_missing_last = r#"
+        title: Image equals one of the referenced fields
+        logsource:
+        detection:
+            selection:
+                Image|fieldref:
+                    - ParentImage
+                    - OriginalFileName
+            condition: selection
+    "#;
+    // The same rules under `neq`: Image must differ from every referenced field present.
+    let neq_missing_first = yaml_missing_first.replace("Image|fieldref:", "Image|fieldref|neq:");
+    let neq_missing_last = yaml_missing_last.replace("Image|fieldref:", "Image|fieldref|neq:");
+
+    // `OriginalFileName` is absent from both events.
+    let equal = Event::from([
+        ("Image", "C:\\Windows\\System32\\cmd.exe"),
+        ("ParentImage", "C:\\Windows\\System32\\cmd.exe"),
+    ]);
+    let different = Event::from([
+        ("Image", "C:\\Windows\\System32\\cmd.exe"),
+        ("ParentImage", "C:\\Windows\\explorer.exe"),
+    ]);
+
+    for yaml in [yaml_missing_first, yaml_missing_last] {
+        let rule = rule_from_yaml(yaml).unwrap();
+        assert!(rule.is_match(&equal));
+        assert!(!rule.is_match(&different));
+    }
+    for yaml in [neq_missing_first, neq_missing_last] {
+        let rule = rule_from_yaml(&yaml).unwrap();
+        assert!(!rule.is_match(&equal));
+        assert!(rule.is_match(&different));
+    }
+}
+
+#[test]
 fn test_match_neq_equals_condition_not() {
     // `field|neq: value` in a selection is equivalent to `not` on a selection holding
     // `field: value`, including for a missing field.

@@ -25,6 +25,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the boolean instead). Rules using `neq` were previously rejected with
   `Unknown field modifier 'neq'`.
 
+### Fixed
+
+- **`fieldref` value lists short-circuited on a missing reference.** With
+  `field|fieldref: [a, b]`, a referenced field absent from the event made the
+  whole comparison `false` immediately instead of just not matching that one
+  reference, so the result depended on the position of the missing field in
+  the list (`[missing, equal]` never matched, `[equal, missing]` did). A missing
+  or non-scalar reference is now simply a non-match for that reference: the
+  remaining references are still tried (OR), `|all` still fails as before, and
+  `|neq` inverts a stable result.
+
 ## [0.7.2] - 2026-09-18
 
 ### Changed

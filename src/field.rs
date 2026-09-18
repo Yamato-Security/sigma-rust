@@ -189,7 +189,7 @@ impl Field {
         };
 
         for val in self.values.iter() {
-            let cmp = if self.modifier.fieldref {
+            let fired = if self.modifier.fieldref {
                 let event_fieldref_value = if let FieldValue::Base(BaseValue::String(s)) = val {
                     event.get(s)
                 } else if let FieldValue::Base(b) = val {
@@ -199,15 +199,21 @@ impl Field {
                     continue;
                 };
 
+                // A missing (or non-scalar) referenced field cannot equal anything, so this
+                // comparison simply does not fire. It must not short-circuit the whole
+                // evaluation: with a list of references the remaining ones are still tried
+                // (OR), and with `all` the usual handling below fails the field. Otherwise the
+                // result would depend on the order of the list, which `neq` would then invert.
                 match event_fieldref_value {
-                    Some(EventValue::Value(v)) => &FieldValue::Base(v.clone()),
-                    _ => return false,
+                    Some(EventValue::Value(v)) => {
+                        event_value.matches(&FieldValue::Base(v.clone()), &self.modifier)
+                    }
+                    _ => false,
                 }
             } else {
-                val
+                event_value.matches(val, &self.modifier)
             };
 
-            let fired = event_value.matches(cmp, &self.modifier);
             if fired && !self.modifier.match_all {
                 return true;
             } else if !fired && self.modifier.match_all {
@@ -858,6 +864,58 @@ mod tests {
         assert!(field.evaluate(&Event::from([("value", "abc"), ("other", "abc")])));
         // So does a missing left-hand field.
         assert!(field.evaluate(&Event::from([("reference", "abc")])));
+    }
+
+    #[test]
+    fn test_evaluate_fieldref_list_missing_reference_is_order_independent() {
+        // A missing referenced field is a non-match for that reference only: the remaining
+        // references in the list are still tried (OR), whatever the order of the list.
+        let matching = Event::from([("value", "abc"), ("present", "abc")]);
+        let differing = Event::from([("value", "abc"), ("present", "xyz")]);
+        for refs in [["missing", "present"], ["present", "missing"]] {
+            let values = refs.iter().map(|r| FieldValue::from(*r)).collect();
+            let field = Field::new("value|fieldref", values).unwrap();
+            assert!(field.evaluate(&matching), "refs: {refs:?}");
+            assert!(!field.evaluate(&differing), "refs: {refs:?}");
+        }
+    }
+
+    #[test]
+    fn test_evaluate_fieldref_list_neq_is_order_independent() {
+        // `neq` negates the whole OR: the value must differ from every present reference.
+        let matching = Event::from([("value", "abc"), ("present", "abc")]);
+        let differing = Event::from([("value", "abc"), ("present", "xyz")]);
+        for refs in [["missing", "present"], ["present", "missing"]] {
+            let values = refs.iter().map(|r| FieldValue::from(*r)).collect();
+            let field = Field::new("value|fieldref|neq", values).unwrap();
+            assert!(!field.evaluate(&matching), "refs: {refs:?}");
+            assert!(field.evaluate(&differing), "refs: {refs:?}");
+        }
+    }
+
+    #[test]
+    fn test_evaluate_fieldref_all_missing_reference() {
+        // With `all` a missing reference fails the field regardless of its position, and
+        // `neq` turns that into a match.
+        let event = Event::from([("value", "abc"), ("present", "abc")]);
+        for refs in [["missing", "present"], ["present", "missing"]] {
+            let values = || refs.iter().map(|r| FieldValue::from(*r)).collect();
+            let field = Field::new("value|fieldref|all", values()).unwrap();
+            assert!(!field.evaluate(&event), "refs: {refs:?}");
+            let field = Field::new("value|fieldref|all|neq", values()).unwrap();
+            assert!(field.evaluate(&event), "refs: {refs:?}");
+        }
+        // Sanity check: with both references present and equal, `all` holds.
+        let field = Field::new(
+            "value|fieldref|all",
+            vec![FieldValue::from("present"), FieldValue::from("other")],
+        )
+        .unwrap();
+        assert!(field.evaluate(&Event::from([
+            ("value", "abc"),
+            ("present", "abc"),
+            ("other", "abc"),
+        ])));
     }
 
     #[test]
