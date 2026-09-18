@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (as a `0.x` crate, breaking changes bump the minor version).
 
+## [Unreleased]
+
+### Added
+
+- **The `neq` field modifier** from the
+  [Sigma specification v2.1.0](https://github.com/SigmaHQ/sigma-specification/blob/main/specification/sigma-appendix-modifiers.md).
+  `neq` negates the whole comparison of a field, so it composes with any other
+  modifier — `Channel|neq`, `CommandLine|contains|neq`, `Image|endswith|neq`,
+  `IpAddress|cidr|neq`, `EventID|gt|neq`, `Image|fieldref|neq`, ... — and lets a
+  rule express an exclusion inside a selection instead of a separate
+  `not filter` selection. With a list of values the field must differ from
+  **all** of them (the negation of the OR), with `|all` it must fail at least one
+  of them (the negation of the AND), and a missing field (or a missing
+  `fieldref` target) counts as different, so it matches — the same semantics as
+  pySigma's `SigmaNegateModifier` and Hayabusa. Repeating `neq` is idempotent,
+  and `exists` stays standalone (`exists|neq` is rejected; negate it by flipping
+  the boolean instead). Rules using `neq` were previously rejected with
+  `Unknown field modifier 'neq'`.
+
 ## [0.7.2] - 2026-09-18
 
 ### Changed
@@ -92,6 +111,7 @@ Releases before `0.7.0` predate this changelog. See the
   `0.4.0` — 2025-01-16 · `0.3.0` — 2024-11-28 · `0.2.1` — 2024-11-01 ·
   `0.2.0` — 2024-10-31
 
+[Unreleased]: https://github.com/Yamato-Security/sigma-rust/compare/v0.7.2...HEAD
 [0.7.2]: https://github.com/Yamato-Security/sigma-rust/releases/tag/v0.7.2
 [0.7.1]: https://github.com/Yamato-Security/sigma-rust/releases/tag/v0.7.1
 [0.7.0]: https://github.com/Yamato-Security/sigma-rust/releases/tag/v0.7.0

@@ -168,7 +168,19 @@ impl Field {
     }
 
     pub(crate) fn evaluate(&self, event: &Event) -> bool {
+        // `neq` (Sigma specification v2.1.0) negates the whole comparison, i.e. the field matches
+        // when the comparison does NOT hold. So the plain comparison is evaluated first and the
+        // result is inverted: with a list of values the field must differ from ALL of them (the
+        // negation of the OR), and with `all` it must fail at least one of them (the negation of
+        // the AND).
+        self.evaluate_comparison(event) ^ self.modifier.neq
+    }
+
+    /// Evaluates the comparison of this field before the `neq` negation is applied.
+    fn evaluate_comparison(&self, event: &Event) -> bool {
         let Some(event_value) = event.get(&self.name) else {
+            // A missing field only satisfies `exists: false`. Under `neq` it counts as different
+            // from every value, so the negation in `evaluate` turns this into a match.
             return matches!(self.modifier.exists, Some(false));
         };
 
@@ -697,5 +709,194 @@ mod tests {
         assert!(!field.evaluate(&event));
         let event = Event::from([("value", "abcdefg"), ("reference", "cde")]);
         assert!(field.evaluate(&event));
+    }
+
+    #[test]
+    fn test_evaluate_neq() {
+        let field = Field::new("test|neq", vec![FieldValue::from("Security")]).unwrap();
+
+        // Different value: `neq` matches.
+        assert!(field.evaluate(&Event::from([("test", "PowerShell")])));
+        // Same value: `neq` does not match.
+        assert!(!field.evaluate(&Event::from([("test", "Security")])));
+        // Like the plain value match, the comparison is case-insensitive.
+        assert!(!field.evaluate(&Event::from([("test", "security")])));
+        // A missing field is different from the value, so `neq` matches.
+        assert!(field.evaluate(&Event::from([("other", "Security")])));
+    }
+
+    #[test]
+    fn test_evaluate_neq_cased() {
+        let field = Field::new("test|cased|neq", vec![FieldValue::from("Security")]).unwrap();
+        assert!(!field.evaluate(&Event::from([("test", "Security")])));
+        assert!(field.evaluate(&Event::from([("test", "security")])));
+    }
+
+    #[test]
+    fn test_evaluate_neq_wildcard() {
+        // Wildcards still apply to the value being negated.
+        let field = Field::new("test|neq", vec![FieldValue::from("Sec*")]).unwrap();
+        assert!(!field.evaluate(&Event::from([("test", "Security")])));
+        assert!(field.evaluate(&Event::from([("test", "PowerShell")])));
+    }
+
+    #[test]
+    fn test_evaluate_neq_number() {
+        let field = Field::new("test|neq", vec![FieldValue::from(4624)]).unwrap();
+        assert!(!field.evaluate(&Event::from([("test", 4624)])));
+        assert!(field.evaluate(&Event::from([("test", 4625)])));
+    }
+
+    #[test]
+    fn test_evaluate_neq_list() {
+        // With a list, the field must be different from ALL of the values: NOT(a OR b).
+        let field = Field::new(
+            "test|neq",
+            vec![FieldValue::from("Security"), FieldValue::from("System")],
+        )
+        .unwrap();
+        assert!(field.evaluate(&Event::from([("test", "PowerShell")])));
+        assert!(!field.evaluate(&Event::from([("test", "Security")])));
+        assert!(!field.evaluate(&Event::from([("test", "System")])));
+    }
+
+    #[test]
+    fn test_evaluate_neq_all() {
+        // `all|neq` negates the AND-linked comparison: NOT(contains a AND contains b).
+        let field = Field::new(
+            "test|contains|all|neq",
+            vec![FieldValue::from("cur"), FieldValue::from("ity")],
+        )
+        .unwrap();
+        // Contains "cur" but not "ity": NOT(true AND false) -> match.
+        assert!(field.evaluate(&Event::from([("test", "curabc")])));
+        // Contains both: NOT(true AND true) -> no match.
+        assert!(!field.evaluate(&Event::from([("test", "curity")])));
+        // Contains neither: NOT(false AND false) -> match.
+        assert!(field.evaluate(&Event::from([("test", "abc")])));
+    }
+
+    #[test]
+    fn test_evaluate_contains_neq() {
+        let field = Field::new("test|contains|neq", vec![FieldValue::from("cur")]).unwrap();
+        assert!(field.evaluate(&Event::from([("test", "PowerShell")])));
+        assert!(!field.evaluate(&Event::from([("test", "Security")])));
+    }
+
+    #[test]
+    fn test_evaluate_contains_cased_neq() {
+        let field = Field::new("test|contains|cased|neq", vec![FieldValue::from("Sec")]).unwrap();
+        // "security" does not contain "Sec" case-sensitively, so `neq` matches.
+        assert!(field.evaluate(&Event::from([("test", "security")])));
+        assert!(!field.evaluate(&Event::from([("test", "Security")])));
+    }
+
+    #[test]
+    fn test_evaluate_startswith_neq() {
+        let field = Field::new("test|startswith|neq", vec![FieldValue::from("Sec")]).unwrap();
+        assert!(field.evaluate(&Event::from([("test", "PowerShell")])));
+        assert!(!field.evaluate(&Event::from([("test", "Security")])));
+    }
+
+    #[test]
+    fn test_evaluate_endswith_neq() {
+        let field = Field::new("test|endswith|neq", vec![FieldValue::from("rity")]).unwrap();
+        assert!(field.evaluate(&Event::from([("test", "PowerShell")])));
+        assert!(!field.evaluate(&Event::from([("test", "Security")])));
+    }
+
+    #[test]
+    fn test_evaluate_windash_neq() {
+        let field = Field::new(
+            "test|contains|windash|neq",
+            vec![FieldValue::from("-param")],
+        )
+        .unwrap();
+        // Every dash variation is negated, so "/param" is still rejected.
+        assert!(!field.evaluate(&Event::from([("test", "program.exe /param")])));
+        assert!(!field.evaluate(&Event::from([("test", "program.exe -param")])));
+        assert!(field.evaluate(&Event::from([("test", "program.exe")])));
+    }
+
+    #[test]
+    fn test_evaluate_regex_neq() {
+        let field = Field::new("test|re|neq", vec![FieldValue::from(r"^Sec.*")]).unwrap();
+        assert!(field.evaluate(&Event::from([("test", "PowerShell")])));
+        assert!(!field.evaluate(&Event::from([("test", "Security")])));
+        // The regex is case-sensitive, so "security" does not match it and `neq` matches.
+        assert!(field.evaluate(&Event::from([("test", "security")])));
+    }
+
+    #[test]
+    fn test_evaluate_cidr_neq() {
+        // `cidr|neq` matches when the IP is NOT in the range, e.g. to exclude an internal subnet.
+        let field = Field::new("test|cidr|neq", vec![FieldValue::from("10.0.0.0/8")]).unwrap();
+        assert!(field.evaluate(&Event::from([("test", "192.0.2.1")])));
+        assert!(!field.evaluate(&Event::from([("test", "10.1.2.3")])));
+        // A value that is not an IP address is not in the range either.
+        assert!(field.evaluate(&Event::from([("test", "not an ip")])));
+    }
+
+    #[test]
+    fn test_evaluate_gt_neq() {
+        let field = Field::new("test|gt|neq", vec![FieldValue::from(1040)]).unwrap();
+        // 1040 is not greater than 1040, so the base `gt` is false and `neq` matches.
+        assert!(field.evaluate(&Event::from([("test", 1040)])));
+        assert!(!field.evaluate(&Event::from([("test", 1041)])));
+        // A missing field makes the base comparison false, so `neq` matches.
+        assert!(field.evaluate(&Event::from([("other", 2000)])));
+    }
+
+    #[test]
+    fn test_evaluate_fieldref_neq() {
+        let field = Field::new("value|fieldref|neq", vec![FieldValue::from("reference")]).unwrap();
+        // Different values: `fieldref|neq` matches.
+        assert!(field.evaluate(&Event::from([("value", "abc"), ("reference", "def")])));
+        // Same values: no match.
+        assert!(!field.evaluate(&Event::from([("value", "abc"), ("reference", "abc")])));
+        // A missing referenced field counts as different, so `fieldref|neq` matches.
+        assert!(field.evaluate(&Event::from([("value", "abc"), ("other", "abc")])));
+        // So does a missing left-hand field.
+        assert!(field.evaluate(&Event::from([("reference", "abc")])));
+    }
+
+    #[test]
+    fn test_evaluate_fieldref_contains_neq() {
+        let field = Field::new(
+            "value|fieldref|contains|neq",
+            vec![FieldValue::from("reference")],
+        )
+        .unwrap();
+        assert!(field.evaluate(&Event::from([("value", "abcdefg"), ("reference", "xyz")])));
+        assert!(!field.evaluate(&Event::from([("value", "abcdefg"), ("reference", "cDe")])));
+    }
+
+    #[test]
+    fn test_evaluate_base64_neq() {
+        let field = Field::new(
+            "test|base64|contains|neq",
+            vec![FieldValue::from("Add-MpPreference ")],
+        )
+        .unwrap();
+        // "Add-MpPreference " base64-encodes to "QWRkLU1wUHJlZmVyZW5jZSA=".
+        assert!(!field.evaluate(&Event::from([("test", "xxQWRkLU1wUHJlZmVyZW5jZSA=xx")])));
+        assert!(field.evaluate(&Event::from([("test", "Add-MpPreference ")])));
+    }
+
+    #[test]
+    fn test_evaluate_neq_sequence_value() {
+        // Matching against list values is not supported (the plain comparison never fires), so
+        // `neq` — being its negation — matches, consistent with a condition-level `not`.
+        let field = Field::new("test|neq", vec![FieldValue::from("a")]).unwrap();
+        let event = Event::from([("test", EventValue::Sequence(vec![EventValue::from("a")]))]);
+        assert!(field.evaluate(&event));
+    }
+
+    #[test]
+    fn test_invalid_contains_neq() {
+        // `neq` does not relax the value type checks of the modifier it negates.
+        let values: Vec<FieldValue> = vec![FieldValue::from("ok"), FieldValue::from(5)];
+        let err = Field::new("test|contains|neq", values).unwrap_err();
+        assert!(matches!(err, ParserError::InvalidValueForStringModifier(name) if name == "test"));
     }
 }
