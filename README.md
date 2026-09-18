@@ -20,7 +20,7 @@ A Rust library for parsing and evaluating Sigma rules to create custom detection
 > and consumed as a git dependency (this fork is not published to crates.io):
 >
 > ```toml
-> sigma-rust = { git = "https://github.com/Yamato-Security/sigma-rust", tag = "v0.7.1" }
+> sigma-rust = { git = "https://github.com/Yamato-Security/sigma-rust", tag = "v0.7.2" }
 > ```
 
 ## Features
