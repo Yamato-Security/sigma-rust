@@ -19,3 +19,6 @@ Cargo.lock
 # Added by cargo
 
 /target
+
+# Local environment files may contain secrets.
+.env
